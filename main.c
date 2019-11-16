@@ -1,10 +1,6 @@
 #include <stdio.h>
 #include <string.h>
 
-char jogadorOposto(char j) {
-	return (j == 'x') ? 'o' : 'x';
-}
-
 int FechouLinha(char *pos) {
 	int i;
 	// Linhas horizontais
@@ -30,7 +26,7 @@ int FechouLinha(char *pos) {
 	return 0;
 }
 
-int AnaliseJogoDaVelha(char *posicao, int CasasLivres, char Jogador, int *nodosVisitados) {
+int AnaliseJogoDaVelha(char *posicao, int CasasLivres, char jogador, int *nodosVisitados, int printaJogadas) {
 	int resultado;
 	(*nodosVisitados)++;
 	if (FechouLinha(posicao)) {
@@ -39,17 +35,17 @@ int AnaliseJogoDaVelha(char *posicao, int CasasLivres, char Jogador, int *nodosV
 	else if (CasasLivres == 0) {
 		resultado = 0;
 	} else {
+		char adversario;
 		int MelhorResultado = -200;
 		int i;
 		for (i = 0; i < 9; i++) {
 			if (posicao[i] == ' ') {
-				posicao[i] = Jogador;
-				// Chama a análise do ponto de vista do adversário
-				Jogador = jogadorOposto(Jogador);
-				int ResultadoDoAdversario = AnaliseJogoDaVelha(posicao, CasasLivres - 1, Jogador, nodosVisitados);
+				posicao[i] = jogador;
+				adversario = (jogador == 'x') ? 'o' : 'x';
+				int ResultadoDoAdversario = AnaliseJogoDaVelha(posicao, CasasLivres - 1, adversario, nodosVisitados, 0);				
 				int ResultadoDaJogada = -ResultadoDoAdversario;
-				if (CasasLivres == 6) {
-					printf("%d\n", ResultadoDoAdversario);
+				if (printaJogadas) {
+					printf("%d\t%d\n", ResultadoDaJogada, i);
 				}
 				if (ResultadoDaJogada > MelhorResultado) {
 					MelhorResultado = ResultadoDaJogada;
@@ -63,17 +59,7 @@ int AnaliseJogoDaVelha(char *posicao, int CasasLivres, char Jogador, int *nodosV
 }
 
 /**
- * Inicializa o jogo através de uma string
- */
-void copiaStr(char *str, char *array) {
-	int i;
-	for (i = 0; i < 9; i++) {
-		array[i] = str[i];
-	}
-}
-
-/**
- * Conta quantas casas restantes há para iniciar a recursão
+ * Conta quantas casas restantes há para determinar o nível inicial da recursão
  */
 int casasRestantes(char *posicao) {
 	int i;
@@ -87,8 +73,8 @@ int casasRestantes(char *posicao) {
 }
 
 /**
- * Quem começa o jogo é o 'x'
  * Conta os 'x' e 'o' para determinar de quem é a vez
+ * Quem começa o jogo é o 'x', então se empatar a contagem o 'x' joga
  */
 char quemJoga(char *posicao) {
 	int i;
@@ -108,39 +94,46 @@ char quemJoga(char *posicao) {
 	}
 }
 
-/**
- * Verifica se foi usada uma string com 9 caracteres
- */
-int valida(char *str) {
-	int i = 0;
-	while (str[i] != '\0') {
-		i++;
-	}
-	if (i != 9) {
-		printf("A string deve ter 9 caracteres\n");
+void printaJogo(char *jogo) {
+	char c;	
+	int i;
+	for (i = 0; i < 9; i++) {
+		if (jogo[i] == ' ') {		
+			c =  '-';
+		} else {
+			c = jogo[i];
+		}
+		printf("%c ", c);
+		// Quebra linha após 3 casas
+		if (((i + 1) % 3) == 0) {
+			printf("\n");
+		}	
 	}
 }
 
 int main() {
-	int nodosVisitados = 0;
-	int resultado;
 	char jogo[10];
-	char l1[] = {' ', ' ', ' ', '\0'};
-	char l2[] = {'o', 'x', 'x', '\0'};
-	char l3[] = {' ', ' ', ' ', '\0'};
-	char jogador = quemJoga(jogo);
-	strcpy(jogo, "");
-	strcat(jogo, l1);
-	strcat(jogo, l2);
-	strcat(jogo, l3);
-	resultado = AnaliseJogoDaVelha(jogo, casasRestantes(jogo), jogador, &nodosVisitados);
-	printf("Nodos visitados: %d\n", nodosVisitados);
-	if (resultado == 0) {
-		printf("Empate\n");
-	} else if (resultado == -1) {
-		printf("Vitória do %c\n", jogadorOposto(jogador));
-	} else if (resultado == 1) {
-		printf("Vitória do %c\n", jogador);
+	char jogador = 'x';
+	int jogada;
+	int nodosVisitados;
+	int espacos;
+	int printJogadas = 0;
+	int resultado;
+	strcpy(jogo, "         ");
+	while (1) {
+		printaJogo(jogo);
+		nodosVisitados = 0;
+		espacos = casasRestantes(jogo);
+		resultado = AnaliseJogoDaVelha(jogo, espacos, jogador, &nodosVisitados, 1);
+		printf("Nodos visitados: %d\n", nodosVisitados);
+		printf("Jogador: '%c'\nResultado: %d\n", jogador, resultado);
+		scanf(" %d", &jogada);
+		jogo[jogada] = jogador;
+		if (jogador == 'x') {
+			jogador = 'o';
+		} else {
+			jogador = 'x';
+		}
 	}
 	return 0;
 }
