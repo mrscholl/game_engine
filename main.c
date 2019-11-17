@@ -1,6 +1,11 @@
 #include <stdio.h>
 #include <string.h>
 
+typedef char bool;
+
+/**
+ * Verifica se houve vitória no jogo da velha
+ */
 int FechouLinha(char *pos) {
 	int i;
 	// Linhas horizontais
@@ -26,36 +31,56 @@ int FechouLinha(char *pos) {
 	return 0;
 }
 
-int AnaliseJogoDaVelha(char *posicao, int CasasLivres, char jogador, int *nodosVisitados, int printaJogadas) {
-	int resultado;
-	(*nodosVisitados)++;
+/**
+ * Grava a posição do jogo em um arquivo no formato que será usado pela rede neural.
+ */
+void gravaEmArquivo(FILE *f, char *posicao) {
+	int i;
+	for (i = 0; i < 9; i++) {
+		if (posicao[i] == 'x') {
+			fprintf(f, "1,0,0,");
+		}
+		else if (posicao[i] == 'o') {
+			fprintf(f, "0,1,0,");
+		}
+		else {
+			fprintf(f, "0,0,1,");
+		}
+	}
+}
+
+/**
+ * Encontra a melhor variação possível para o jogador atual
+ * Que é o mesmo que a pior variação para o adversário
+ */
+int resolveJogoDaVelha(char *posicao, int casasLivres, char jogador, FILE *f) {
+	gravaEmArquivo(f, posicao);
 	if (FechouLinha(posicao)) {
-		resultado = -1;
+		// Derrota
+		return -1;
 	}	
-	else if (CasasLivres == 0) {
-		resultado = 0;
+	else if (casasLivres == 0) {
+		// Empate
+		return 0;
 	} else {
-		char adversario;
-		int MelhorResultado = -200;
+		int melhorResultado = -5;
 		int i;
 		for (i = 0; i < 9; i++) {
 			if (posicao[i] == ' ') {
 				posicao[i] = jogador;
-				adversario = (jogador == 'x') ? 'o' : 'x';
-				int ResultadoDoAdversario = AnaliseJogoDaVelha(posicao, CasasLivres - 1, adversario, nodosVisitados, 0);				
-				int ResultadoDaJogada = -ResultadoDoAdversario;
-				if (printaJogadas) {
-					printf("%d\t%d\n", ResultadoDaJogada, i);
+				char adversario = (jogador == 'x') ? 'o' : 'x';
+				// Chama a função do ponto de vista do adversário
+				// Inverte o resultado, pois a derrota dele é a minha vitória
+				int resultado = -resolveJogoDaVelha(posicao, casasLivres - 1, adversario, f);
+				if (resultado > melhorResultado) {
+					melhorResultado = resultado;
 				}
-				if (ResultadoDaJogada > MelhorResultado) {
-					MelhorResultado = ResultadoDaJogada;
-				}
+				// Remove a marca da jogada para não ter que criar cópia do array
 				posicao[i] = ' ';
 			}
 		}
-		resultado = MelhorResultado;
+		return melhorResultado;
 	}
-	return resultado;
 }
 
 /**
@@ -70,28 +95,6 @@ int casasRestantes(char *posicao) {
 		}
 	}
 	return casas;
-}
-
-/**
- * Conta os 'x' e 'o' para determinar de quem é a vez
- * Quem começa o jogo é o 'x', então se empatar a contagem o 'x' joga
- */
-char quemJoga(char *posicao) {
-	int i;
-	int nx = 0;
-	int no = 0;
-	for (i = 0; i < 9; i++) {
-		if (posicao[i] == 'x') {
-			nx++;
-		} else if (posicao[i] == 'o') {
-			no++;
-		}
-	}
-	if (nx > no) { 
-		return 'o';
-	} else {
-		return 'x';
-	}
 }
 
 void printaJogo(char *jogo) {
@@ -111,20 +114,28 @@ void printaJogo(char *jogo) {
 	}
 }
 
+void salvaEmArquivo() {
+	
+	
+}
+
 int main() {
 	char jogo[10];
 	char jogador = 'x';
 	int jogada;
-	int nodosVisitados;
+	int nodosVisitados = 0;
 	int espacos;
-	int printJogadas = 0;
 	int resultado;
+	bool printJogadas = 0;
 	strcpy(jogo, "         ");
-	while (1) {
+	FILE *f = fopen("dados_jogo_da_velha.arff", "w");
+	espacos = casasRestantes(jogo);
+	resolveJogoDaVelha(jogo, 9, 'x', f);
+	/*while (1) {
 		printaJogo(jogo);
 		nodosVisitados = 0;
 		espacos = casasRestantes(jogo);
-		resultado = AnaliseJogoDaVelha(jogo, espacos, jogador, &nodosVisitados, 1);
+		resultado = AnaliseJogoDaVelha(jogo, espacos, jogador, &nodosVisitados, 1, 0);
 		printf("Nodos visitados: %d\n", nodosVisitados);
 		printf("Jogador: '%c'\nResultado: %d\n", jogador, resultado);
 		scanf(" %d", &jogada);
@@ -134,6 +145,7 @@ int main() {
 		} else {
 			jogador = 'x';
 		}
-	}
+	}*/
+	fclose(f);
 	return 0;
 }
