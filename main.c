@@ -4,6 +4,28 @@
 typedef char bool;
 
 /**
+ * Em um jogo da velha, se não houverem erros, o resultado esperado é empate,
+ * mas é preferível realizar uma jogada que possibilite mais chances de vitória caso o
+ * adversário erre.
+ */
+typedef struct features {
+	int resultado;
+	float probDerrota;
+	float probVitoria;
+	float probEmpate;
+} FeaturesNodo;
+
+/**
+ * Inverte o resultado e troca chances de vitória por derrota
+ */
+FeaturesNodo inverteFeaturesNodo(FeaturesNodo *p) {
+	float aux = p->probDerrota;
+	p->probDerrota = p->probVitoria;
+	p->probVitoria = aux;
+	p->resultado   = -p->resultado;
+}
+
+/**
  * Verifica se houve vitória no jogo da velha
  */
 int FechouLinha(char *pos) {
@@ -34,70 +56,123 @@ int FechouLinha(char *pos) {
 /**
  * Grava a posição do jogo em um arquivo no formato que será usado pela rede neural.
  */
-void gravaEmArquivo(FILE *f, char *posicao) {
+void gravaEmArquivo(FILE *f, char *posicao, int melhorJogada) {
 	int i;
 	for (i = 0; i < 9; i++) {
 		if (posicao[i] == 'x') {
 			fprintf(f, "1,0,0,");
-		}
-		else if (posicao[i] == 'o') {
+		} else if (posicao[i] == 'o') {
 			fprintf(f, "0,1,0,");
-		}
-		else {
+		} else {
 			fprintf(f, "0,0,1,");
 		}
+	}
+	fprintf(f, "c%d\n", melhorJogada);
+}
+
+/**
+ * Imprime na tela a casa, o resultado e as probabilidades da jogada
+ */
+void imprimeJogada(int jogada, FeaturesNodo *p) {
+	if (p->resultado == 0) {	
+		printf("%d\t%c\t%.2f\t%.2f\t%.2f\n", jogada, 'E', p->probVitoria, p->probEmpate, p->probDerrota);
+	} else if (p->resultado == -1) {	
+		printf("%d\t%c\t%.2f\t%.2f\t%.2f\n", jogada, 'D', p->probVitoria, p->probEmpate, p->probDerrota);
+	} else if (p->resultado == 1) {
+		printf("%d\t%c\t%.2f\t%.2f\t%.2f\n", jogada, 'V', p->probVitoria, p->probEmpate, p->probDerrota);
 	}
 }
 
 /**
  * Encontra a melhor variação possível para o jogador atual
  * Que é o mesmo que a pior variação para o adversário
+
+ * Se imprimeJogadas == 1 imprime as jogadas possíveis. Somente no primeiro nível de recursão
+ * para não encher toda a tela (seta para zero na chamada dentro da função).
  */
-int resolveJogoDaVelha(char *posicao, int casasLivres, char jogador, FILE *f) {
-	gravaEmArquivo(f, posicao);
+FeaturesNodo resolveJogoDaVelha(char *posicao, int casasLivres, char jogador, bool salvaNoArquivo, FILE *f, bool imprimeJogadas) {
+	FeaturesNodo featuresNodo;
 	if (FechouLinha(posicao)) {
 		// Derrota
-		return -1;
+		featuresNodo.resultado   = -1;
+		featuresNodo.probVitoria = 0;
+		featuresNodo.probDerrota = 1;
+		featuresNodo.probEmpate  = 0;
 	}	
 	else if (casasLivres == 0) {
 		// Empate
-		return 0;
+		featuresNodo.resultado   = 0;
+		featuresNodo.probVitoria = 0;
+		featuresNodo.probDerrota = 0;
+		featuresNodo.probEmpate  = 1;
 	} else {
-		int melhorResultado = -5;
+		// Procura pela melhor jogada
+		featuresNodo.resultado   = -2;
+		featuresNodo.probVitoria = 0;
+		featuresNodo.probDerrota = 0;
+		featuresNodo.probEmpate  = 0;
+		int melhorJogada = -1;
 		int i;
 		for (i = 0; i < 9; i++) {
 			if (posicao[i] == ' ') {
 				posicao[i] = jogador;
 				char adversario = (jogador == 'x') ? 'o' : 'x';
 				// Chama a função do ponto de vista do adversário
-				// Inverte o resultado, pois a derrota dele é a minha vitória
-				int resultado = -resolveJogoDaVelha(posicao, casasLivres - 1, adversario, f);
-				if (resultado > melhorResultado) {
-					melhorResultado = resultado;
+				// Inverte o resultado, derrota do adversário = vitória do jogador atual
+				FeaturesNodo featuresJogada = resolveJogoDaVelha(posicao, casasLivres - 1, adversario, salvaNoArquivo, f, 0);
+				inverteFeaturesNodo(&featuresJogada);
+				// Se a jogada é a que gera o melhor resultado até o momento, adota ela.
+				// Entre jogadas com mesmo resultado adota a que gera mais chances de vitória
+				if ((featuresJogada.resultado > featuresNodo.resultado) || ((featuresJogada.resultado == featuresNodo.resultado) && (featuresJogada.probVitoria > featuresNodo.probVitoria))) {
+					featuresNodo.resultado = featuresJogada.resultado;
+					melhorJogada = i;
 				}
+				if (imprimeJogadas) {
+					imprimeJogada(i, &featuresJogada);
+				}
+				// Soma as probabilidades da jogada atual nas probabilidades do nodo
+				float divisor = (float) casasLivres;
+				featuresNodo.probEmpate  += featuresJogada.probEmpate  / divisor;
+				featuresNodo.probDerrota += featuresJogada.probDerrota / divisor;
+				featuresNodo.probVitoria += featuresJogada.probVitoria / divisor;
 				// Remove a marca da jogada para não ter que criar cópia do array
 				posicao[i] = ' ';
 			}
 		}
-		return melhorResultado;
+		if (imprimeJogadas) {
+			printf("Melhor jogada: %d\n", melhorJogada);
+		}
+		if (casasLivres > 5) {
+			if (salvaNoArquivo) {
+				gravaEmArquivo(f, posicao, melhorJogada);
+			}
+		}
 	}
+	return featuresNodo;
 }
 
 /**
- * Conta quantas casas restantes há para determinar o nível inicial da recursão
+ * Salva arquivo no formato utilizado pelo Weka.
  */
-int casasRestantes(char *posicao) {
+void salvaArff(char *jogo) {
 	int i;
-	int casas = 0;
+	FILE *f = fopen("dados_jogo_da_velha.arff", "w");	
+	fprintf(f, "@relation JogoDaVelha\n");
 	for (i = 0; i < 9; i++) {
-		if (posicao[i] == ' ') {
-			casas++;
-		}
+		fprintf(f, "@attribute casa%dx numeric\n", i);
+		fprintf(f, "@attribute casa%do numeric\n", i);
+		fprintf(f, "@attribute casa%dvazia numeric\n", i);
 	}
-	return casas;
+	fprintf(f, "@attribute class {c0,c1,c2,c3,c4,c5,c6,c7,c8}\n");
+	fprintf(f, "@data\n");
+	resolveJogoDaVelha(jogo, 9, 'x', 1, f, 0);
+	fclose(f);
 }
 
-void printaJogo(char *jogo) {
+/**
+ * Imprime o jogo da velha na tela
+ */
+void imprimeJogo(char *jogo) {
 	char c;	
 	int i;
 	for (i = 0; i < 9; i++) {
@@ -112,40 +187,36 @@ void printaJogo(char *jogo) {
 			printf("\n");
 		}	
 	}
-}
-
-void salvaEmArquivo() {
-	
-	
+	printf("Jgd\tRes\tV\tE\tD\n");
 }
 
 int main() {
+	char acao;
 	char jogo[10];
-	char jogador = 'x';
-	int jogada;
-	int nodosVisitados = 0;
-	int espacos;
-	int resultado;
-	bool printJogadas = 0;
 	strcpy(jogo, "         ");
-	FILE *f = fopen("dados_jogo_da_velha.arff", "w");
-	espacos = casasRestantes(jogo);
-	resolveJogoDaVelha(jogo, 9, 'x', f);
-	/*while (1) {
-		printaJogo(jogo);
-		nodosVisitados = 0;
-		espacos = casasRestantes(jogo);
-		resultado = AnaliseJogoDaVelha(jogo, espacos, jogador, &nodosVisitados, 1, 0);
-		printf("Nodos visitados: %d\n", nodosVisitados);
-		printf("Jogador: '%c'\nResultado: %d\n", jogador, resultado);
-		scanf(" %d", &jogada);
-		jogo[jogada] = jogador;
-		if (jogador == 'x') {
-			jogador = 'o';
-		} else {
-			jogador = 'x';
+	printf("Digite 1 para gerar o arquivo com as posições e as jogadas corretas do jogo da velha.\n");
+	printf("Digite 2 para jogar.\n");
+	acao = getchar();
+	if (acao == '1') {
+		salvaArff(jogo);
+	} else {
+		char jogador = 'x';
+		int casasLivres = 9;
+		while (1) {
+			int jogada;
+			imprimeJogo(jogo);
+			if (casasLivres == 0) {
+				break;
+			}
+			resolveJogoDaVelha(jogo, casasLivres--, jogador, 0, 0, 1);
+			scanf(" %d", &jogada);
+			jogo[jogada] = jogador;
+			if (jogador == 'x') {
+				jogador = 'o';
+			} else {
+				jogador = 'x';
+			}
 		}
-	}*/
-	fclose(f);
+	}
 	return 0;
 }
