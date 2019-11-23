@@ -1,24 +1,24 @@
 #include <stdio.h>
 #include <string.h>
 
-typedef char bool;
-
 /**
  * Em um jogo da velha, se não houverem erros, o resultado esperado é empate,
  * mas é preferível realizar uma jogada que possibilite mais chances de vitória caso o
  * adversário erre.
  */
 typedef struct features {
+	int melhorJogada;
 	int resultado;
 	float probDerrota;
 	float probVitoria;
 	float probEmpate;
-} FeaturesNodo;
+}
+FeaturesPosicao;
 
 /**
  * Inverte o resultado e troca chances de vitória por derrota
  */
-FeaturesNodo inverteFeaturesNodo(FeaturesNodo *p) {
+FeaturesPosicao inverteFeaturesPosicao(FeaturesPosicao *p) {
 	float aux = p->probDerrota;
 	p->probDerrota = p->probVitoria;
 	p->probVitoria = aux;
@@ -73,7 +73,7 @@ void gravaEmArquivo(FILE *f, char *posicao, int melhorJogada) {
 /**
  * Imprime na tela a casa, o resultado e as probabilidades da jogada
  */
-void imprimeJogada(int jogada, FeaturesNodo *p) {
+void imprimeJogada(int jogada, FeaturesPosicao *p) {
 	if (p->resultado == 0) {	
 		printf("%d\t%c\t%.2f\t%.2f\t%.2f\n", jogada, 'E', p->probVitoria, p->probEmpate, p->probDerrota);
 	} else if (p->resultado == -1) {	
@@ -86,32 +86,30 @@ void imprimeJogada(int jogada, FeaturesNodo *p) {
 /**
  * Encontra a melhor variação possível para o jogador atual
  * Que é o mesmo que a pior variação para o adversário
-
- * Se imprimeJogadas == 1 imprime as jogadas possíveis. Somente no primeiro nível de recursão
- * para não encher toda a tela (seta para zero na chamada dentro da função).
  */
-FeaturesNodo resolveJogoDaVelha(char *posicao, int casasLivres, char jogador, bool salvaNoArquivo, FILE *f, bool imprimeJogadas) {
-	FeaturesNodo featuresNodo;
+FeaturesPosicao jogoDaVelha(char *posicao, int casasLivres, char jogador, int salvaNoArquivo, FILE *f) {
+	FeaturesPosicao featPosicao;
 	if (FechouLinha(posicao)) {
 		// Derrota
-		featuresNodo.resultado   = -1;
-		featuresNodo.probVitoria = 0;
-		featuresNodo.probDerrota = 1;
-		featuresNodo.probEmpate  = 0;
+		featPosicao.resultado   = -1;
+		featPosicao.probVitoria = 0;
+		featPosicao.probDerrota = 1;
+		featPosicao.probEmpate  = 0;
 	}	
 	else if (casasLivres == 0) {
 		// Empate
-		featuresNodo.resultado   = 0;
-		featuresNodo.probVitoria = 0;
-		featuresNodo.probDerrota = 0;
-		featuresNodo.probEmpate  = 1;
+		featPosicao.resultado   = 0;
+		featPosicao.probVitoria = 0;
+		featPosicao.probDerrota = 0;
+		featPosicao.probEmpate  = 1;
 	} else {
 		// Procura pela melhor jogada
-		featuresNodo.resultado   = -2;
-		featuresNodo.probVitoria = 0;
-		featuresNodo.probDerrota = 0;
-		featuresNodo.probEmpate  = 0;
-		int melhorJogada = -1;
+		featPosicao.resultado    = -2;
+		featPosicao.probVitoria  = 0;
+		featPosicao.probDerrota  = 0;
+		featPosicao.probEmpate   = 0;
+		featPosicao.melhorJogada = -1;
+		float probVitoria = 0;
 		int i;
 		for (i = 0; i < 9; i++) {
 			if (posicao[i] == ' ') {
@@ -119,36 +117,29 @@ FeaturesNodo resolveJogoDaVelha(char *posicao, int casasLivres, char jogador, bo
 				char adversario = (jogador == 'x') ? 'o' : 'x';
 				// Chama a função do ponto de vista do adversário
 				// Inverte o resultado, derrota do adversário = vitória do jogador atual
-				FeaturesNodo featuresJogada = resolveJogoDaVelha(posicao, casasLivres - 1, adversario, salvaNoArquivo, f, 0);
-				inverteFeaturesNodo(&featuresJogada);
+				FeaturesPosicao featuresJogada = jogoDaVelha(posicao, casasLivres - 1, adversario, salvaNoArquivo, f);
+				inverteFeaturesPosicao(&featuresJogada);
 				// Se a jogada é a que gera o melhor resultado até o momento, adota ela.
 				// Entre jogadas com mesmo resultado adota a que gera mais chances de vitória
-				if ((featuresJogada.resultado > featuresNodo.resultado) || ((featuresJogada.resultado == featuresNodo.resultado) && (featuresJogada.probVitoria > featuresNodo.probVitoria))) {
-					featuresNodo.resultado = featuresJogada.resultado;
-					melhorJogada = i;
-				}
-				if (imprimeJogadas) {
-					imprimeJogada(i, &featuresJogada);
+				if ((featuresJogada.resultado > featPosicao.resultado) || ((featuresJogada.resultado == featPosicao.resultado) && (featuresJogada.probVitoria > probVitoria))) {
+					featPosicao.resultado = featuresJogada.resultado;
+					featPosicao.melhorJogada = i;
+					probVitoria = featuresJogada.probVitoria;
 				}
 				// Soma as probabilidades da jogada atual nas probabilidades do nodo
 				float divisor = (float) casasLivres;
-				featuresNodo.probEmpate  += featuresJogada.probEmpate  / divisor;
-				featuresNodo.probDerrota += featuresJogada.probDerrota / divisor;
-				featuresNodo.probVitoria += featuresJogada.probVitoria / divisor;
+				featPosicao.probEmpate  += featuresJogada.probEmpate  / divisor;
+				featPosicao.probDerrota += featuresJogada.probDerrota / divisor;
+				featPosicao.probVitoria += featuresJogada.probVitoria / divisor;
 				// Remove a marca da jogada para não ter que criar cópia do array
 				posicao[i] = ' ';
 			}
 		}
-		if (imprimeJogadas) {
-			printf("Melhor jogada: %d\n", melhorJogada);
-		}
-		if (casasLivres > 5) {
-			if (salvaNoArquivo) {
-				gravaEmArquivo(f, posicao, melhorJogada);
-			}
+		if (salvaNoArquivo && casasLivres > 3) {
+			gravaEmArquivo(f, posicao, featPosicao.melhorJogada);
 		}
 	}
-	return featuresNodo;
+	return featPosicao;
 }
 
 /**
@@ -165,7 +156,7 @@ void salvaArff(char *jogo) {
 	}
 	fprintf(f, "@attribute class {c0,c1,c2,c3,c4,c5,c6,c7,c8}\n");
 	fprintf(f, "@data\n");
-	resolveJogoDaVelha(jogo, 9, 'x', 1, f, 0);
+	jogoDaVelha(jogo, 9, 'x', 1, f);
 	fclose(f);
 }
 
@@ -187,7 +178,6 @@ void imprimeJogo(char *jogo) {
 			printf("\n");
 		}	
 	}
-	printf("Jgd\tRes\tV\tE\tD\n");
 }
 
 int main() {
@@ -205,17 +195,16 @@ int main() {
 		while (1) {
 			int jogada;
 			imprimeJogo(jogo);
-			if (casasLivres == 0) {
+			if (casasLivres == 0 || FechouLinha(jogo)) {
 				break;
 			}
-			resolveJogoDaVelha(jogo, casasLivres--, jogador, 0, 0, 1);
+			jogador = 'x';
 			scanf(" %d", &jogada);
 			jogo[jogada] = jogador;
-			if (jogador == 'x') {
-				jogador = 'o';
-			} else {
-				jogador = 'x';
-			}
+			casasLivres--;
+			jogador = 'o';
+			jogada = jogoDaVelha(jogo, casasLivres--, jogador, 0, 0).melhorJogada;
+			jogo[jogada] = jogador;
 		}
 	}
 	return 0;
