@@ -1,10 +1,11 @@
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
 /**
- * Em um jogo da velha, se nÃ£o houverem erros, o resultado esperado Ã© empate,
- * mas Ã© preferÃ­vel realizar uma jogada que possibilite mais chances de vitÃ³ria caso o
- * adversÃ¡rio erre.
+ * Em um jogo da velha, se não houverem erros, o resultado esperado é empate,
+ * mas é preferível realizar uma jogada que possibilite mais chances de vitória caso o
+ * adversário erre.
  */
 typedef struct features {
 	int melhorJogada;
@@ -16,7 +17,7 @@ typedef struct features {
 FeaturesPosicao;
 
 /**
- * Inverte o resultado e troca chances de vitÃ³ria por derrota
+ * Inverte o resultado e troca chances de vitória por derrota
  */
 FeaturesPosicao inverteFeaturesPosicao(FeaturesPosicao *p) {
 	float aux = p->probDerrota;
@@ -26,7 +27,7 @@ FeaturesPosicao inverteFeaturesPosicao(FeaturesPosicao *p) {
 }
 
 /**
- * Verifica se houve vitÃ³ria no jogo da velha
+ * Verifica se houve vitória no jogo da velha
  */
 int FechouLinha(char *pos) {
 	int i;
@@ -54,7 +55,7 @@ int FechouLinha(char *pos) {
 }
 
 /**
- * Grava a posiÃ§Ã£o do jogo em um arquivo no formato que serÃ¡ usado pela rede neural.
+ * Grava a posição do jogo em um arquivo no formato que será usado pela rede neural.
  */
 void gravaEmArquivo(FILE *f, char *posicao, int melhorJogada) {
 	int i;
@@ -84,10 +85,10 @@ void imprimeJogada(int jogada, FeaturesPosicao *p) {
 }
 
 /**
- * Encontra a melhor variaÃ§Ã£o possÃ­vel para o jogador atual
- * Que Ã© o mesmo que a pior variaÃ§Ã£o para o adversÃ¡rio
+ * Encontra a melhor variação possível para o jogador atual
+ * Que é o mesmo que a pior variação para o adversário
  */
-FeaturesPosicao jogoDaVelha(char *posicao, int casasLivres, char jogador, int salvaNoArquivo, FILE *f) {
+FeaturesPosicao jogoDaVelha(char *posicao, int casasLivres, char jogador) {
 	FeaturesPosicao featPosicao;
 	if (FechouLinha(posicao)) {
 		// Derrota
@@ -115,12 +116,12 @@ FeaturesPosicao jogoDaVelha(char *posicao, int casasLivres, char jogador, int sa
 			if (posicao[i] == ' ') {
 				posicao[i] = jogador;
 				char adversario = (jogador == 'x') ? 'o' : 'x';
-				// Chama a funÃ§Ã£o do ponto de vista do adversÃ¡rio
-				// Inverte o resultado, derrota do adversÃ¡rio = vitÃ³ria do jogador atual
-				FeaturesPosicao featuresJogada = jogoDaVelha(posicao, casasLivres - 1, adversario, salvaNoArquivo, f);
+				// Chama a função do ponto de vista do adversário
+				// Inverte o resultado, derrota do adversário = vitória do jogador atual
+				FeaturesPosicao featuresJogada = jogoDaVelha(posicao, casasLivres - 1, adversario);
 				inverteFeaturesPosicao(&featuresJogada);
-				// Se a jogada Ã© a que gera o melhor resultado atÃ© o momento, adota ela.
-				// Entre jogadas com mesmo resultado adota a que gera mais chances de vitÃ³ria
+				// Se a jogada é a que gera o melhor resultado até o momento, adota ela.
+				// Entre jogadas com mesmo resultado adota a que gera mais chances de vitória
 				if ((featuresJogada.resultado > featPosicao.resultado) || ((featuresJogada.resultado == featPosicao.resultado) && (featuresJogada.probVitoria > probVitoria))) {
 					featPosicao.resultado = featuresJogada.resultado;
 					featPosicao.melhorJogada = i;
@@ -131,33 +132,12 @@ FeaturesPosicao jogoDaVelha(char *posicao, int casasLivres, char jogador, int sa
 				featPosicao.probEmpate  += featuresJogada.probEmpate  / divisor;
 				featPosicao.probDerrota += featuresJogada.probDerrota / divisor;
 				featPosicao.probVitoria += featuresJogada.probVitoria / divisor;
-				// Remove a marca da jogada para nÃ£o ter que criar cÃ³pia do array
+				// Remove a marca da jogada para não ter que criar cópia do array
 				posicao[i] = ' ';
 			}
 		}
-		if (salvaNoArquivo && casasLivres > 3) {
-			gravaEmArquivo(f, posicao, featPosicao.melhorJogada);
-		}
 	}
 	return featPosicao;
-}
-
-/**
- * Salva arquivo no formato utilizado pelo Weka.
- */
-void salvaArff(char *jogo) {
-	int i;
-	FILE *f = fopen("dados_jogo_da_velha.arff", "w");	
-	fprintf(f, "@relation JogoDaVelha\n");
-	for (i = 0; i < 9; i++) {
-		fprintf(f, "@attribute casa%dx numeric\n", i);
-		fprintf(f, "@attribute casa%do numeric\n", i);
-		fprintf(f, "@attribute casa%dvazia numeric\n", i);
-	}
-	fprintf(f, "@attribute class {c0,c1,c2,c3,c4,c5,c6,c7,c8}\n");
-	fprintf(f, "@data\n");
-	jogoDaVelha(jogo, 9, 'x', 1, f);
-	fclose(f);
 }
 
 /**
@@ -173,39 +153,68 @@ void imprimeJogo(char *jogo) {
 			c = jogo[i];
 		}
 		printf("%c ", c);
-		// Quebra linha apÃ³s 3 casas
+		// Quebra linha após 3 casas
 		if (((i + 1) % 3) == 0) {
 			printf("\n");
 		}	
 	}
 }
 
+int fimDeJogo(char *jogo, int espacos) {
+    if (FechouLinha(jogo) || espacos == 0) {
+       return 1;
+    }
+    return 0;
+}
+
+char oponente(char jogador) {
+    if (jogador == 'x') {
+        return 'o';
+    }
+    return 'x';
+}
+
+void computadorJoga(char *jogo, int espacos, char jogador);
+
+void usuarioJoga(char *jogo, int espacos, char jogador) {
+    int casa;
+    printf("\n");
+    imprimeJogo(jogo);
+    scanf(" %d", &casa);
+    jogo[casa - 1] = jogador;
+    espacos    = espacos - 1;
+    if (!fimDeJogo(jogo, espacos)) {
+        computadorJoga(jogo, espacos, oponente(jogador));
+    }
+}
+
+void computadorJoga(char *jogo, int espacos, char jogador) {
+    int casa   = jogoDaVelha(jogo, espacos, jogador).melhorJogada;
+    jogo[casa] = jogador;
+    espacos    = espacos - 1;
+    if (!fimDeJogo(jogo, espacos)) {
+        usuarioJoga(jogo, espacos, oponente(jogador));
+    }
+}
+
+char *novoJogo() {
+    char *jogo = (char *) malloc(10 * sizeof(char));
+    strcpy(jogo, "         ");
+    return jogo;
+}
+
 int main() {
-	char acao;
-	char jogo[10];
-	strcpy(jogo, "         ");
-	printf("Digite 1 para gerar o arquivo com as posiÃ§Ãµes e as jogadas corretas do jogo da velha.\n");
-	printf("Digite 2 para jogar.\n");
-	acao = getchar();
-	if (acao == '1') {
-		salvaArff(jogo);
-	} else {
-		char jogador = 'x';
-		int casasLivres = 9;
-		while (1) {
-			int jogada;
-			imprimeJogo(jogo);
-			if (casasLivres == 0 || FechouLinha(jogo)) {
-				break;
-			}
-			jogador = 'x';
-			scanf(" %d", &jogada);
-			jogo[jogada] = jogador;
-			casasLivres--;
-			jogador = 'o';
-			jogada = jogoDaVelha(jogo, casasLivres--, jogador, 0, 0).melhorJogada;
-			jogo[jogada] = jogador;
-		}
+	char opcao;
+	printf("Digite 1 para jogar como X.\n");
+	printf("Digite 2 para jogar como O.\n");
+	printf("Digite 3 para análise.\n");
+	opcao = getchar();
+	switch (opcao) {
+	    case '1':
+		usuarioJoga(novoJogo(), 9, 'x');
+		break;
+        case '2':
+		computadorJoga(novoJogo(), 9, 'x');
 	}
 	return 0;
 }
