@@ -174,26 +174,43 @@ char oponente(char jogador) {
     return 'x';
 }
 
-void computadorJoga(char *jogo, int espacos, char jogador);
-
+/**
+ * Recebe a entrada do usuário
+ */
 void usuarioJoga(char *jogo, int espacos, char jogador) {
     int casa;
-    printf("\n");
-    imprimeJogo(jogo);
     scanf(" %d", &casa);
     jogo[casa - 1] = jogador;
-    espacos    = espacos - 1;
-    if (!fimDeJogo(jogo, espacos)) {
-        computadorJoga(jogo, espacos, oponente(jogador));
-    }
 }
 
+/**
+ * Chama a função recursiva
+ */
 void computadorJoga(char *jogo, int espacos, char jogador) {
     int casa   = jogoDaVelha(jogo, espacos, jogador).melhorJogada;
     jogo[casa] = jogador;
-    espacos    = espacos - 1;
+}
+
+/**
+ * Verifica se é a vez do computador ou do jogador
+ * e chama a função correspondente
+ */
+void jogar(char *vezDeQuem, char *jogo, int espacos, char jogador) {
+    if (strcmp(vezDeQuem, "computador") == 0) {
+        computadorJoga(jogo, espacos, jogador);
+        vezDeQuem = "usuario";
+    } else {
+        printf("\n");
+        imprimeJogo(jogo);
+        usuarioJoga(jogo, espacos, jogador);
+        vezDeQuem = "computador";
+    }
+    espacos = espacos - 1;
     if (!fimDeJogo(jogo, espacos)) {
-        usuarioJoga(jogo, espacos, oponente(jogador));
+        jogar(vezDeQuem, jogo, espacos, oponente(jogador));
+    } else {
+        printf("\n");
+        imprimeJogo(jogo);
     }
 }
 
@@ -204,6 +221,7 @@ char *novoJogo() {
 }
 
 int main() {
+    char *jogo;
 	char opcao;
 	printf("Digite 1 para jogar como X.\n");
 	printf("Digite 2 para jogar como O.\n");
@@ -211,10 +229,11 @@ int main() {
 	opcao = getchar();
 	switch (opcao) {
 	    case '1':
-		usuarioJoga(novoJogo(), 9, 'x');
+	    jogo = novoJogo();
+		jogar("jogador", jogo, 9, 'x');
 		break;
         case '2':
-		computadorJoga(novoJogo(), 9, 'x');
+		jogar("computador", novoJogo(), 9, 'x');
 	}
 	return 0;
 }
