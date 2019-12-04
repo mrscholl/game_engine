@@ -88,7 +88,7 @@ void imprimeJogada(int jogada, FeaturesPosicao *p) {
  * Encontra a melhor variação possível para o jogador atual
  * Que é o mesmo que a pior variação para o adversário
  */
-FeaturesPosicao jogoDaVelha(char *posicao, int casasLivres, char jogador) {
+FeaturesPosicao jogoDaVelha(char *posicao, int casasLivres, char jogador, int analise) {
 	FeaturesPosicao featPosicao;
 	if (FechouLinha(posicao)) {
 		// Derrota
@@ -118,8 +118,20 @@ FeaturesPosicao jogoDaVelha(char *posicao, int casasLivres, char jogador) {
 				char adversario = (jogador == 'x') ? 'o' : 'x';
 				// Chama a função do ponto de vista do adversário
 				// Inverte o resultado, derrota do adversário = vitória do jogador atual
-				FeaturesPosicao featuresJogada = jogoDaVelha(posicao, casasLivres - 1, adversario);
+				FeaturesPosicao featuresJogada = jogoDaVelha(posicao, casasLivres - 1, adversario, 0);
 				inverteFeaturesPosicao(&featuresJogada);
+				// Se é analise imprime na tela as jogadas
+				if (analise) {
+				    char resultEsperado;
+				    if (featuresJogada.resultado == 1) {
+				        resultEsperado = 'V';
+				    } else if (featuresJogada.resultado == 0) {
+				        resultEsperado = 'E';
+				    } else {
+				        resultEsperado = 'D';
+				    } 
+				    printf("%d\t%c\t%.2f\t%.2f\t%.2f\n", i + 1, resultEsperado, featuresJogada.probVitoria, featuresJogada.probEmpate, featuresJogada.probDerrota);
+				}
 				// Se a jogada é a que gera o melhor resultado até o momento, adota ela.
 				// Entre jogadas com mesmo resultado adota a que gera mais chances de vitória
 				if ((featuresJogada.resultado > featPosicao.resultado) || ((featuresJogada.resultado == featPosicao.resultado) && (featuresJogada.probVitoria > probVitoria))) {
@@ -179,6 +191,7 @@ char oponente(char jogador) {
  */
 void usuarioJoga(char *jogo, int espacos, char jogador) {
     int casa;
+    printf("Jogada (1 a 9): ");
     scanf(" %d", &casa);
     jogo[casa - 1] = jogador;
 }
@@ -187,7 +200,7 @@ void usuarioJoga(char *jogo, int espacos, char jogador) {
  * Chama a função recursiva
  */
 void computadorJoga(char *jogo, int espacos, char jogador) {
-    int casa   = jogoDaVelha(jogo, espacos, jogador).melhorJogada;
+    int casa   = jogoDaVelha(jogo, espacos, jogador, 0).melhorJogada;
     jogo[casa] = jogador;
 }
 
@@ -214,6 +227,21 @@ void jogar(char *vezDeQuem, char *jogo, int espacos, char jogador) {
     }
 }
 
+void analise(char *jogo, int espacos, char jogador) {
+    printf("\n");
+    imprimeJogo(jogo);
+    printf("Jgd\tR.E.\tPV\tPE\tPV\n");
+    jogoDaVelha(jogo, espacos, jogador, 1);
+    usuarioJoga(jogo, espacos, jogador);
+    espacos = espacos - 1;
+    if (!fimDeJogo(jogo, espacos)) {
+        analise(jogo, espacos, oponente(jogador));
+    } else {
+        printf("\n");
+        imprimeJogo(jogo);
+    }
+}
+
 char *novoJogo() {
     char *jogo = (char *) malloc(10 * sizeof(char));
     strcpy(jogo, "         ");
@@ -234,6 +262,9 @@ int main() {
 		break;
         case '2':
 		jogar("computador", novoJogo(), 9, 'x');
+		break;
+		case '3':
+		analise(novoJogo(), 9, 'x');
 	}
 	return 0;
 }
